@@ -1,21 +1,30 @@
-package models
+package repositories
 
 import (
-	"github.com/princeparmar/go-helpers/mysqlmanager"
+	"database/sql"
 )
 
-// Access represents an access object with ID and Name fields
 type Access struct {
 	ID   int
 	Name string
 }
 
-// Create creates a new access object in the database and sets its ID
-func (a *Access) Create() error {
+// AccessRepository provides access to the access store
+type AccessRepository struct {
+	db *sql.DB
+}
+
+// NewAccessRepository returns a new instance of AccessRepository
+func NewAccessRepository(db *sql.DB) *AccessRepository {
+	return &AccessRepository{db: db}
+}
+
+// Create creates a new access in the database and sets its ID
+func (r *AccessRepository) Create(access *Access) error {
 	// Prepare the query to insert a new access object
-	query := "INSERT INTO access (access_name, created_date, updated_date) VALUES (?, NOW(), NOW())"
+	query := "INSERT INTO access (access_name) VALUES (?)"
 	// Execute the query with the access name parameter
-	result, err := mysqlmanager.Exec(query, a.Name)
+	result, err := r.db.Exec(query, access.Name)
 	if err != nil {
 		return err
 	}
@@ -27,48 +36,46 @@ func (a *Access) Create() error {
 	}
 
 	// Set the ID of the access object
-	a.ID = int(id)
+	access.ID = int(id)
 
 	return nil
 }
 
-// GetAccess retrieves an access object with the given ID from the database
-func GetAccess(id int) (*Access, error) {
+// Get retrieves an access object with the given ID from the database
+func (r *AccessRepository) Get(id int) (*Access, error) {
 	// Prepare the query to select an access object by ID
 	query := "SELECT access_id, access_name FROM access WHERE access_id = ?"
 	// Execute the query with the ID parameter
-	row := mysqlmanager.QueryRow(query, id)
+	row := r.db.QueryRow(query, id)
 	access := &Access{}
 	err := row.Scan(&access.ID, &access.Name)
 	return access, err
 }
 
 // Update updates an access object in the database with the new data
-func (a *Access) Update() error {
+func (r *AccessRepository) Update(access *Access) error {
 	// Prepare the query to update an access object by ID
-	query := "UPDATE access SET access_name = ?, updated_date = NOW() WHERE access_id = ?"
+	query := "UPDATE access SET access_name = ? WHERE access_id = ?"
 	// Execute the query with the access name and ID parameters
-	_, err := mysqlmanager.Exec(query, a.Name, a.ID)
-
+	_, err := r.db.Exec(query, access.Name, access.ID)
 	return err
 }
 
-// DeleteAccess deletes an access object with the given ID from the database
-func DeleteAccess(id int) error {
+// Delete deletes an access object with the given ID from the database
+func (r *AccessRepository) Delete(id int) error {
 	// Prepare the query to delete an access object by ID
 	query := "DELETE FROM access WHERE access_id = ?"
 	// Execute the query with the ID parameter
-	_, err := mysqlmanager.Exec(query, id)
-
+	_, err := r.db.Exec(query, id)
 	return err
 }
 
-// GetAccesses retrieves all access objects from the database
-func GetAccesses() ([]*Access, error) {
+// GetAll retrieves all access objects from the database
+func (r *AccessRepository) GetAll() ([]*Access, error) {
 	// Prepare the query to select all access objects
 	query := "SELECT access_id, access_name FROM access"
 	// Execute the query
-	rows, err := mysqlmanager.Query(query)
+	rows, err := r.db.Query(query)
 	if err != nil {
 		return nil, err
 	}
@@ -89,16 +96,15 @@ func GetAccesses() ([]*Access, error) {
 	return accesses, rows.Err()
 }
 
-// CreateAccessTable creates the access table in the database
-func CreateAccessTable() error {
+// CreateTable creates the access table in the database
+func (r *AccessRepository) CreateTable() error {
 	query := `
         CREATE TABLE IF NOT EXISTS access (
             access_id INT AUTO_INCREMENT PRIMARY KEY,
             access_name VARCHAR(255) NOT NULL UNIQUE,
 			created_date DATETIME NOT NULL DEFAULT NOW(),
-			updated_date DATETIME NOT NULL DEFAULT NOW(),
-			)`
-	// Execute the query to create the access table
-	_, err := mysqlmanager.Exec(query)
+			updated_date DATETIME NOT NULL DEFAULT NOW()
+        )`
+	_, err := r.db.Exec(query)
 	return err
 }
