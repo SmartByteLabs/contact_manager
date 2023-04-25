@@ -4,8 +4,6 @@ import (
 	"database/sql"
 	"errors"
 	"time"
-
-	"github.com/princeparmar/contact_manager/models"
 )
 
 type UserRole struct {
@@ -131,7 +129,7 @@ func (r *userRoleRepository) GetRolesForUser(userID int) ([]*Role, error) {
 	return roles, nil
 }
 
-func (r *userRoleRepository) GetAllAccess(userID int) ([]*models.Access, error) {
+func (r *userRoleRepository) GetAllAccess(userID int) ([]*Access, error) {
 	query := `
 		SELECT DISTINCT access.access_id, access.access_name
 		FROM user_role
@@ -146,9 +144,9 @@ func (r *userRoleRepository) GetAllAccess(userID int) ([]*models.Access, error) 
 	}
 	defer rows.Close()
 
-	accesses := []*models.Access{}
+	accesses := []*Access{}
 	for rows.Next() {
-		access := &models.Access{}
+		access := &Access{}
 		err := rows.Scan(&access.ID, &access.Name)
 		if err != nil {
 			return nil, err
