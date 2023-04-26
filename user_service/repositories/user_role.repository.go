@@ -19,6 +19,7 @@ type UserRoleRepository interface {
 	Delete(int, int) error
 	GetAll() ([]*UserRole, error)
 	GetRolesForUser(int) ([]*Role, error)
+	GetAllAccess(userID int) ([]*Access, error)
 }
 
 type userRoleRepository struct {

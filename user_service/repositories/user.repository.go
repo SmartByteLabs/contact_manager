@@ -55,6 +55,33 @@ func (r *UserRepository) Get(id int) (*User, error) {
 	return user, nil
 }
 
+func (r *UserRepository) GetAll() ([]*User, error) {
+	query := "SELECT id, user_name, email_id, mobile FROM user"
+	rows, err := r.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	users := []*User{}
+
+	for rows.Next() {
+		user := &User{}
+		err := rows.Scan(&user.ID, &user.UserName, &user.EmailID, &user.Mobile)
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, user)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return users, nil
+}
+
 // Update updates an existing User record in the database.
 func (r *UserRepository) Update(user *User) error {
 	query := "UPDATE users SET user_name = ?, mobile = ?, updated_date = NOW(), email_id = ? WHERE user_id = ?"

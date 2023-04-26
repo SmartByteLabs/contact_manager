@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"strconv"
 
@@ -14,6 +13,15 @@ import (
 	"github.com/princeparmar/go-helpers/utils"
 )
 
+// User defines a struct for user data.
+type User struct {
+	ID     int
+	Name   string `json:"name"`
+	Email  string `json:"email"`
+	Mobile string `json:"mobile"`
+}
+
+// createUserModel maps User to User model.
 func createUserModel(u *User) *repositories.User {
 	return &repositories.User{
 		ID:       u.ID,
@@ -23,28 +31,24 @@ func createUserModel(u *User) *repositories.User {
 	}
 }
 
-// User defines a struct for user data.
-type User struct {
-	ID     int
-	Name   string `json:"name"`
-	Email  string `json:"email"`
-	Mobile string `json:"mobile"`
-}
-
 // ParseRequest parses the HTTP request and extracts any relevant data into the User object.
 func (u *User) ParseRequest(ctx context.IContext, w http.ResponseWriter, r *http.Request) error {
-	// Read the request body
-	body, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		return err
+
+	if r.Method == http.MethodPost {
+		// Read the request body
+		body, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			return err
+		}
+
+		// Unmarshal the request body into the User object
+		err = json.Unmarshal(body, u)
+		if err != nil {
+			return err
+		}
 	}
 
-	// Unmarshal the request body into the User object
-	err = json.Unmarshal(body, u)
-	if err != nil {
-		return err
-	}
-
+	// Parse ID from the query parameter
 	id := r.URL.Query().Get("id")
 	i, err := strconv.Atoi(id)
 	if err != nil {
@@ -75,7 +79,8 @@ func (u *User) ValidateRequest(ctx context.IContext) error {
 
 // CreateUserExecutor defines an APIExecutor for creating a new user.
 type CreateUserExecutor struct {
-	User     User
+	User
+	clienthelper.BaseAPIExecutor
 	UserRepo repositories.UserRepository
 }
 
@@ -84,38 +89,6 @@ func NewCreateUserExecutor(repo repositories.UserRepository) clienthelper.APIExe
 	return &CreateUserExecutor{
 		UserRepo: repo,
 	}
-}
-
-// ParseRequest parses the HTTP request and extracts any relevant data into the User object.
-func (e *CreateUserExecutor) ParseRequest(ctx context.IContext, w http.ResponseWriter, r *http.Request) error {
-	// Read the request body
-	body, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		return err
-	}
-
-	// Unmarshal the request body into the User object
-	err = json.Unmarshal(body, &e.User)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// ValidateRequest validates the data in the User object and returns any errors that occur during validation.
-func (e *CreateUserExecutor) ValidateRequest(ctx context.IContext) error {
-	// Validate email format
-	if e.User.Email != "" && !utils.ValidateEmail(e.User.Email) {
-		return errors.New("email format is invalid")
-	}
-
-	// Validate mobile format
-	if e.User.Mobile != "" && !utils.ValidateMobile(e.User.Mobile) {
-		return errors.New("mobile format is invalid")
-	}
-
-	return nil
 }
 
 // Controller executes the business logic for creating a new user and returns the created user
@@ -130,24 +103,126 @@ func (e *CreateUserExecutor) Controller(ctx context.IContext) (interface{}, erro
 	return user, nil
 }
 
-// HandleResponse takes in the result of the Controller method, any errors that occur,
-// and the APIResponse object to generate the HTTP response. It takes in an interface,
-// an error, and an APIResponse pointer and does not return anything.
-func (e *CreateUserExecutor) HandleResponse(ctx context.IContext, response interface{}, err error, apiResponse *clienthelper.APIResponse) {
+// DeleteUserExecutor defines an APIExecutor for deleting a user by ID.
+type DeleteUserExecutor struct {
+	User
+	clienthelper.BaseAPIExecutor
+	UserRepo repositories.UserRepository
+}
+
+// NewDeleteUserExecutor returns a new instance of DeleteUserExecutor.
+func NewDeleteUserExecutor(repo repositories.UserRepository) clienthelper.APIExecutor {
+	return &DeleteUserExecutor{
+		UserRepo: repo,
+	}
+}
+
+// Controller executes the business logic for deleting a user by ID and returns any errors that occur during execution.
+func (e *DeleteUserExecutor) Controller(ctx context.IContext) (interface{}, error) {
+	id := e.User.ID
+	err := e.UserRepo.Delete(id)
 	if err != nil {
-		// Handle error response
-		apiResponse.SetStatusCode(http.StatusInternalServerError).
-			GetResponse().SetStatusCode(http.StatusInternalServerError).
-			GetErrors().SetClientMessage("an error occurred while processing the request").AddError(clienthelper.NewErrorFromErr(err))
-	} else {
-		// Handle success response
-		apiResponse.SetStatusCode(http.StatusOK).
-			GetResponse().SetStatusCode(http.StatusOK).SetData(response)
+		return nil, err
 	}
 
-	// Send the API response
-	if err := apiResponse.Send(); err != nil {
-		// Handle send response error
-		log.Printf("Failed to send API response: %v", err)
+	return nil, nil
+}
+
+// UpdateUserExecutor defines an APIExecutor for updating a user by ID.
+type UpdateUserExecutor struct {
+	User
+	clienthelper.BaseAPIExecutor
+	UserRepo repositories.UserRepository
+}
+
+// NewUpdateUserExecutor returns a new instance of UpdateUserExecutor.
+func NewUpdateUserExecutor(repo repositories.UserRepository) clienthelper.APIExecutor {
+	return &UpdateUserExecutor{
+		UserRepo: repo,
 	}
+}
+
+// Controller executes the business logic for updating a user by ID and returns the updated user
+// and any errors that occur during execution.
+func (e *UpdateUserExecutor) Controller(ctx context.IContext) (interface{}, error) {
+	user := createUserModel(&e.User)
+	err := e.UserRepo.Update(user)
+	if err != nil {
+		return nil, err
+	}
+
+	return user, nil
+}
+
+// GetUserExecutor defines an APIExecutor for getting a user by ID.
+type GetUserExecutor struct {
+	User
+	clienthelper.BaseAPIExecutor
+	UserRepo repositories.UserRepository
+}
+
+// NewGetUserExecutor returns a new instance of GetUserExecutor.
+func NewGetUserExecutor(repo repositories.UserRepository) clienthelper.APIExecutor {
+	return &GetUserExecutor{
+		UserRepo: repo,
+	}
+}
+
+// Controller executes the business logic for getting a user by ID and returns the user
+// and any errors that occur during execution.
+func (e *GetUserExecutor) Controller(ctx context.IContext) (interface{}, error) {
+	id := e.User.ID
+	user, err := e.UserRepo.Get(id)
+	if err != nil {
+		return nil, err
+	}
+
+	return user, nil
+}
+
+// GetAllUsersExecutor defines an APIExecutor for getting all users.
+type GetAllUsersExecutor struct {
+	clienthelper.BaseAPIExecutor
+	UserRepo repositories.UserRepository
+}
+
+// NewGetAllUsersExecutor returns a new instance of GetAllUsersExecutor.
+func NewGetAllUsersExecutor(repo repositories.UserRepository) clienthelper.APIExecutor {
+	return &GetAllUsersExecutor{
+		UserRepo: repo,
+	}
+}
+
+// Controller executes the business logic for getting all users and returns the users
+// and any errors that occur during execution.
+func (e *GetAllUsersExecutor) Controller(ctx context.IContext) (interface{}, error) {
+	return e.UserRepo.GetAll()
+}
+
+// UserAccessExecutor defines an APIExecutor for getting a list of accesses based on the user ID.
+type UserAccessExecutor struct {
+	User
+	clienthelper.BaseAPIExecutor
+	userRoleRepository repositories.UserRoleRepository
+}
+
+// NewUserAccessExecutor returns a new instance of UserAccessExecutor.
+func NewUserAccessExecutor(repo repositories.UserRoleRepository) clienthelper.APIExecutor {
+	return &UserAccessExecutor{
+		userRoleRepository: repo,
+	}
+}
+
+// Controller executes the business logic for getting a list of accesses based on the user ID and returns the accesses
+// and any errors that occur during execution.
+func (e *UserAccessExecutor) Controller(ctx context.IContext) (interface{}, error) {
+	accesses, err := e.userRoleRepository.GetAllAccess(e.User.ID)
+	if err != nil {
+		return nil, err
+	}
+	if len(accesses) == 0 {
+		return nil, errors.New("no accesses found for user")
+	}
+
+	return accesses, nil
 }
