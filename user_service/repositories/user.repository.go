@@ -150,7 +150,7 @@ func (r *UserRepository) List() ([]*User, error) {
 	return users, nil
 }
 
-// GetPassword retrieves the password of a user from the database by ID.
+// GetPassword retrieves the password of a user from the database by user_id.
 func (r *UserRepository) GetPassword(id int) (string, error) {
 	query := "SELECT password FROM users WHERE user_id = ?"
 	row := r.db.QueryRow(query, id)
@@ -163,6 +163,21 @@ func (r *UserRepository) GetPassword(id int) (string, error) {
 		return "", err
 	}
 	return password, nil
+}
+
+// GetUserByUserName retrieves a User record from the database by user_name.
+func (r *UserRepository) GetUserByUserName(userName string) (*User, error) {
+	query := "SELECT user_id, user_name, mobile, email_id FROM users WHERE user_name = ?"
+	row := r.db.QueryRow(query, userName)
+	user := &User{}
+	err := row.Scan(&user.ID, &user.UserName, &user.Mobile, &user.EmailID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, errors.New("invalid user name")
+		}
+		return nil, err
+	}
+	return user, nil
 }
 
 // UpdatePassword updates the password of an existing User record in the database.

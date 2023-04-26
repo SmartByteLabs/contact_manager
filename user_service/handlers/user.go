@@ -6,7 +6,9 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strconv"
+	"time"
 
+	"github.com/dgrijalva/jwt-go"
 	"github.com/princeparmar/contact_manager/repositories"
 	"github.com/princeparmar/go-helpers/clienthelper"
 	"github.com/princeparmar/go-helpers/context"
@@ -301,4 +303,99 @@ func (e *UpdateUserPasswordExecutor) Controller(ctx context.IContext) (interface
 	err = e.UserRepo.UpdatePassword(e.UserPassword.ID, newPasswordHash)
 
 	return nil, err
+}
+
+// Login defines a struct for user login.
+type Login struct {
+	UserName string `json:"username"`
+	Password string `json:"password"`
+}
+
+// ParseRequest parses the HTTP request and extracts any relevant data into the Login object.
+func (l *Login) ParseRequest(ctx context.IContext, w http.ResponseWriter, r *http.Request) error {
+	// Read the request body
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		return err
+	}
+
+	// Unmarshal the request body into the Login object
+	return json.Unmarshal(body, l)
+}
+
+// ValidateRequest validates the data in the Login object and returns any errors that occur during validation.
+func (l *Login) ValidateRequest(ctx context.IContext) error {
+	// Validate username field
+	if l.UserName == "" {
+		return errors.New("username field is required")
+	}
+
+	// Validate password field
+	if l.Password == "" {
+		return errors.New("password field is required")
+	}
+
+	return nil
+}
+
+// LoginExecutor defines an APIExecutor for user login.
+type LoginExecutor struct {
+	Login
+	clienthelper.BaseAPIExecutor
+	UserRepo     repositories.UserRepository
+	UserRoleRepo repositories.UserRoleRepository
+	AccessRepo   repositories.AccessRepository
+
+	SecretKey string
+}
+
+// NewLoginExecutor returns a new instance of LoginExecutor.
+func NewLoginExecutor(userRepo repositories.UserRepository, userRoleRepo repositories.UserRoleRepository, accessRepo repositories.AccessRepository, secretKey string) clienthelper.APIExecutor {
+	return &LoginExecutor{
+		UserRepo:     userRepo,
+		UserRoleRepo: userRoleRepo,
+		AccessRepo:   accessRepo,
+		SecretKey:    secretKey,
+	}
+}
+
+// Controller executes the business logic for user login and returns a JWT token containing user information
+// and any errors that occur during execution.
+func (e *LoginExecutor) Controller(ctx context.IContext) (interface{}, error) {
+	// Get the user from the database
+	user, err := e.UserRepo.GetUserByUserName(e.UserName)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get the user from the database
+	password, err := e.UserRepo.GetPassword(user.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Validate the password
+	if password != utils.MD5Hash(e.Password) {
+		return nil, errors.New("invalid username or password")
+	}
+
+	// Get the user's access from the database
+	access, _ := e.UserRoleRepo.GetAllAccess(user.ID)
+
+	// Generate a JWT token
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"user_id":  user.ID,
+		"username": user.UserName,
+		"access":   access,
+		"exp":      time.Now().Add(time.Hour * 24).Unix(), // Set token expiration time to 24 hours
+	})
+
+	// Sign the token with the secret key
+	tokenString, err := token.SignedString(e.SecretKey)
+	if err != nil {
+		return nil, err
+	}
+
+	// Return the JWT token
+	return map[string]string{"token": tokenString}, nil
 }
