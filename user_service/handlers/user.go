@@ -382,16 +382,13 @@ func (e *LoginExecutor) Controller(ctx context.IContext) (interface{}, error) {
 	// Get the user's access from the database
 	access, _ := e.UserRoleRepo.GetAllAccess(user.ID)
 
-	// Generate a JWT token
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+	// Sign the token with the secret key
+	tokenString, err := utils.CreateJWT(e.SecretKey, jwt.MapClaims{
 		"user_id":  user.ID,
 		"username": user.UserName,
 		"access":   access,
 		"exp":      time.Now().Add(time.Hour * 24).Unix(), // Set token expiration time to 24 hours
 	})
-
-	// Sign the token with the secret key
-	tokenString, err := token.SignedString(e.SecretKey)
 	if err != nil {
 		return nil, err
 	}
