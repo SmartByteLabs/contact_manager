@@ -226,3 +226,79 @@ func (e *UserAccessExecutor) Controller(ctx context.IContext) (interface{}, erro
 
 	return accesses, nil
 }
+
+// UserPassword defines a struct for updating user password.
+type UserPassword struct {
+	ID          int
+	OldPassword string `json:"old_password"`
+	Password    string `json:"password"`
+}
+
+// ParseRequest parses the HTTP request and extracts any relevant data into the UserPassword object.
+func (u *UserPassword) ParseRequest(ctx context.IContext, w http.ResponseWriter, r *http.Request) error {
+	// Parse ID from the query parameter
+	id := r.URL.Query().Get("id")
+	i, err := strconv.Atoi(id)
+	if err != nil {
+		return errors.New("invalid id in query")
+	}
+
+	u.ID = i
+
+	// Read the request body
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		return err
+	}
+
+	// Unmarshal the request body into the UserPassword object
+	return json.Unmarshal(body, u)
+}
+
+// ValidateRequest validates the data in the UserPassword object and returns any errors that occur during validation.
+func (u *UserPassword) ValidateRequest(ctx context.IContext) error {
+	// Validate old password field
+	if u.OldPassword == "" {
+		return errors.New("old_password field is required")
+	}
+
+	// Validate password field
+	if u.Password == "" {
+		return errors.New("password field is required")
+	}
+
+	return nil
+}
+
+// UpdateUserPasswordExecutor defines an APIExecutor for updating a user's password by ID.
+type UpdateUserPasswordExecutor struct {
+	UserPassword
+	clienthelper.BaseAPIExecutor
+	UserRepo repositories.UserRepository
+}
+
+// NewUpdateUserPasswordExecutor returns a new instance of UpdateUserPasswordExecutor.
+func NewUpdateUserPasswordExecutor(repo repositories.UserRepository) clienthelper.APIExecutor {
+	return &UpdateUserPasswordExecutor{
+		UserRepo: repo,
+	}
+}
+
+// Controller executes the business logic for updating a user's password by ID and returns the updated user
+// and any errors that occur during execution.
+func (e *UpdateUserPasswordExecutor) Controller(ctx context.IContext) (interface{}, error) {
+	password, err := e.UserRepo.GetPassword(e.UserPassword.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	oldPasswordHash := utils.MD5Hash(e.UserPassword.OldPassword)
+	if oldPasswordHash != password {
+		return nil, errors.New("incorrect old password")
+	}
+
+	newPasswordHash := utils.MD5Hash(e.UserPassword.Password)
+	err = e.UserRepo.UpdatePassword(e.UserPassword.ID, newPasswordHash)
+
+	return nil, err
+}

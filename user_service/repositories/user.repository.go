@@ -56,7 +56,7 @@ func (r *UserRepository) Get(id int) (*User, error) {
 }
 
 func (r *UserRepository) GetAll() ([]*User, error) {
-	query := "SELECT id, user_name, email_id, mobile FROM user"
+	query := "SELECT user_id, user_name, email_id, mobile FROM user"
 	rows, err := r.db.Query(query)
 	if err != nil {
 		return nil, err
@@ -150,17 +150,53 @@ func (r *UserRepository) List() ([]*User, error) {
 	return users, nil
 }
 
+// GetPassword retrieves the password of a user from the database by ID.
+func (r *UserRepository) GetPassword(id int) (string, error) {
+	query := "SELECT password FROM users WHERE user_id = ?"
+	row := r.db.QueryRow(query, id)
+	var password string
+	err := row.Scan(&password)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", errors.New("invalid user id")
+		}
+		return "", err
+	}
+	return password, nil
+}
+
+// UpdatePassword updates the password of an existing User record in the database.
+func (r *UserRepository) UpdatePassword(userID int, password string) error {
+	query := "UPDATE users SET password = ?, updated_date = NOW() WHERE user_id = ?"
+	result, err := r.db.Exec(query, password, userID)
+	if err != nil {
+		return err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rowsAffected == 0 {
+		return errors.New("no rows were affected during the update")
+	}
+
+	return nil
+}
+
 // CreateTable creates the 'users' table in the database.
 func (ur *UserRepository) CreateTable() error {
 	query := `
-        CREATE TABLE IF NOT EXISTS users (
-            user_id INT AUTO_INCREMENT PRIMARY KEY,
-            user_name VARCHAR(255) NOT NULL UNIQUE,
-            mobile VARCHAR(10) NOT NULL,
-            email_id VARCHAR(255) NOT NULL,
-			created_date DATETIME NOT NULL DEFAULT NOW(),
-			updated_date DATETIME NOT NULL DEFAULT NOW()
-		)
+	CREATE TABLE IF NOT EXISTS users (
+		user_id INT AUTO_INCREMENT PRIMARY KEY,
+		user_name VARCHAR(255) NOT NULL UNIQUE,
+		mobile VARCHAR(10) NOT NULL,
+		email_id VARCHAR(255) NOT NULL,
+		password VARCHAR(255) NOT NULL,
+		created_date DATETIME NOT NULL DEFAULT NOW(),
+		updated_date DATETIME NOT NULL DEFAULT NOW()
+	)	
 	`
 
 	_, err := ur.db.Exec(query)
